@@ -29,12 +29,17 @@ if (!PARAM$reference_month %in% foto_mes_values) {
 reference_data <- dataset[foto_mes == PARAM$reference_month]
 cat("Reference month", PARAM$reference_month, "has", nrow(reference_data), "observations\n")
 
-# Get numeric columns for KS testing (exclude identifiers and categorical variables)
-exclude_cols <- c("numero_de_cliente", "foto_mes", "clase_ternaria")
-numeric_cols <- names(dataset)[sapply(dataset, is.numeric)]
-numeric_cols <- setdiff(numeric_cols, exclude_cols)
+# Get monetary columns for KS testing
+# por como armé los nombres de campos,
+# estos son los campos que expresan variables monetarias
+campos_monetarios <- colnames(dataset)
+campos_monetarios <- campos_monetarios[campos_monetarios %like% "^(m|Visa_m|Master_m|vm_m)"]
 
-cat("Testing", length(numeric_cols), "numeric variables\n")
+# Use monetary columns as our test variables
+numeric_cols <- campos_monetarios
+
+cat("Testing", length(numeric_cols), "monetary variables\n")
+cat("Monetary fields found:", paste(campos_monetarios, collapse = ", "), "\n")
 cat("Variables to test:", paste(head(numeric_cols, 10), collapse = ", "), 
     if(length(numeric_cols) > 10) "..." else "", "\n")
 
@@ -69,7 +74,7 @@ perform_ks_test <- function(var_name, month1_data, month2_data, month1_name, mon
     n1 = length(var1),
     n2 = length(var2),
     ks_statistic = round(ks_result$statistic, 4),
-    p_value = round(ks_result$p.value, 6),
+    p_value = round(ks_result$p.value, 3),
     significant = ks_result$p.value < PARAM$alpha,
     interpretation = ifelse(ks_result$p.value < PARAM$alpha, 
                            "Significant difference (data drift detected)", 
@@ -143,7 +148,15 @@ print(head(drift_by_variable, 20))
 # Most significant cases (lowest p-values)
 cat("\n=== MOST SIGNIFICANT DRIFT CASES ===\n")
 most_significant <- results_dt[significant == TRUE][order(p_value)][1:20]
-print(most_significant[, .(variable, comparison, ks_statistic, p_value)])
+
+# Format p_value to always show 3 decimals
+most_significant_formatted <- most_significant[, .(
+  variable, 
+  comparison, 
+  ks_statistic, 
+  p_value = sprintf("%.3f", p_value)
+)]
+print(most_significant_formatted)
 
 # Export results
 output_file <- "ks_test_results.csv"
