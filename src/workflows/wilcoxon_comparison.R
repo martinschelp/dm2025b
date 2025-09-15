@@ -22,20 +22,20 @@ methods <- list(
 
 # Function to perform Wilcoxon test between two vectors
 perform_wilcoxon_test <- function(vec1, vec2, name1, name2) {
-  # Check if vectors have same length for paired test
-  if (length(vec1) != length(vec2)) {
-    # Use unpaired test if lengths differ
-    wt <- wilcox.test(vec1, vec2, paired = FALSE)
-    test_type <- "unpaired"
-  } else {
-    # Use paired test if lengths are equal
-    wt <- wilcox.test(vec1, vec2, paired = TRUE)
-    test_type <- "paired"
-  }
+  # Always use paired test by truncating to minimum length
+  min_length <- min(length(vec1), length(vec2))
+  
+  # Truncate both vectors to the same length (first n values with matching seeds)
+  vec1_truncated <- vec1[1:min_length]
+  vec2_truncated <- vec2[1:min_length]
+  
+  # Use paired test with truncated vectors
+  wt <- wilcox.test(vec1_truncated, vec2_truncated, paired = TRUE)
+  test_type <- "paired"
   
   pvalue <- wt$p.value
-  mean1 <- mean(vec1)
-  mean2 <- mean(vec2)
+  mean1 <- mean(vec1_truncated)
+  mean2 <- mean(vec2_truncated)
   
   # Determine result
   result <- 0
@@ -54,8 +54,10 @@ perform_wilcoxon_test <- function(vec1, vec2, name1, name2) {
   return(list(
     comparison = paste(name1, "vs", name2),
     test_type = test_type,
-    n1 = length(vec1),
-    n2 = length(vec2),
+    n1 = length(vec1_truncated),
+    n2 = length(vec2_truncated),
+    original_n1 = length(vec1),
+    original_n2 = length(vec2),
     mean1 = round(mean1, 3),
     mean2 = round(mean2, 3),
     pvalue = round(pvalue, 4),
@@ -87,7 +89,7 @@ for (i in 1:(length(methods) - 1)) {
     # Print individual result
     cat("Comparison", comparison_count, ":", test_result$comparison, "\n")
     cat("  Test type:", test_result$test_type, "\n")
-    cat("  Sample sizes: n1 =", test_result$n1, ", n2 =", test_result$n2, "\n")
+    cat("  Sample sizes used: n =", test_result$n1, "(truncated from", test_result$original_n1, "vs", test_result$original_n2, ")\n")
     cat("  Means:", name1, "=", test_result$mean1, ",", name2, "=", test_result$mean2, "\n")
     cat("  P-value:", test_result$pvalue, "\n")
     cat("  Result:", test_result$interpretation, "\n")
@@ -97,16 +99,17 @@ for (i in 1:(length(methods) - 1)) {
 
 # Create summary table
 cat("\n=== SUMMARY TABLE ===\n")
-cat(sprintf("%-20s %-10s %-8s %-8s %-8s %-8s %-10s %s\n", 
-            "Comparison", "Test", "n1", "n2", "Mean1", "Mean2", "P-value", "Result"))
-cat(paste(rep("-", 90), collapse=""), "\n")
+cat(sprintf("%-20s %-10s %-8s %-12s %-8s %-8s %-10s %s\n", 
+            "Comparison", "Test", "n_used", "Original_n", "Mean1", "Mean2", "P-value", "Result"))
+cat(paste(rep("-", 95), collapse=""), "\n")
 
 for (result in results) {
-  cat(sprintf("%-20s %-10s %-8d %-8d %-8.3f %-8.3f %-10.4f %d\n",
+  original_sizes <- paste0(result$original_n1, "vs", result$original_n2)
+  cat(sprintf("%-20s %-10s %-8d %-12s %-8.3f %-8.3f %-10.4f %d\n",
               result$comparison,
               result$test_type,
               result$n1,
-              result$n2,
+              original_sizes,
               result$mean1,
               result$mean2,
               result$pvalue,
@@ -120,10 +123,7 @@ cat("Total comparisons performed:", comparison_count, "\n")
 significant_results <- sum(sapply(results, function(x) x$result != 0))
 cat("Significant differences found:", significant_results, "\n")
 
-paired_tests <- sum(sapply(results, function(x) x$test_type == "paired"))
-unpaired_tests <- sum(sapply(results, function(x) x$test_type == "unpaired"))
-cat("Paired tests:", paired_tests, "\n")
-cat("Unpaired tests:", unpaired_tests, "\n")
+cat("All tests performed as paired tests using truncated vectors\n")
 
 # Method performance ranking by mean
 method_means <- sapply(methods, mean)
